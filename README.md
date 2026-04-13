@@ -1,0 +1,1 @@
+# kuriq-AI
