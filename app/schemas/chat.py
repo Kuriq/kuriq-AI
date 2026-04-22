@@ -1,7 +1,6 @@
 from pydantic import BaseModel, field_validator
 from typing import List, Optional
 
-
 # Request 
 
 class ChatMessage(BaseModel):

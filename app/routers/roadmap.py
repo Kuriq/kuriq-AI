@@ -1,9 +1,10 @@
 import logging
 import time
 from fastapi import APIRouter, HTTPException
-from app.schemas.roadmap import RoadmapRequest, RoadmapResponse
+from app.schemas.roadmap import RoadmapRequest, RoadmapResponse, RescheduleRequest, RescheduleResponse
 from app.services.rag import search_courses
 from app.services.llm import extract_intent, generate_roadmap
+from app.services.reschedule import reschedule_roadmap
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -64,4 +65,23 @@ async def generate(request: RoadmapRequest):
         raise HTTPException(status_code=502, detail={
             "code": "LLM_API_ERROR",
             "message": "로드맵 생성 중 오류가 발생했습니다.",
+        })
+
+
+@router.post("/ai/roadmap/reschedule", response_model=RescheduleResponse)
+async def reschedule(request: RescheduleRequest):
+    try:
+        result = reschedule_roadmap(request)
+        logger.info(f"[로드맵] 재조정 완료 — {len(result.weeks)}주 / userId={request.userId}")
+        return result
+    except TimeoutError:
+        raise HTTPException(status_code=504, detail={
+            "code": "LLM_TIMEOUT",
+            "message": "LLM 응답 시간이 초과되었습니다.",
+        })
+    except Exception as e:
+        logger.error(f"[로드맵] 재조정 실패: {e}")
+        raise HTTPException(status_code=502, detail={
+            "code": "LLM_API_ERROR",
+            "message": "로드맵 재조정 중 오류가 발생했습니다.",
         })

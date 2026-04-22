@@ -1,9 +1,8 @@
 import logging
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from app.routers import roadmap, courses, chat
+from app.routers import roadmap, courses, chat, internal, quiz, note
 from app.core.config import settings
-from app.core.chroma import get_collection
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,7 +22,7 @@ app = FastAPI(
 @app.middleware("http")
 async def verify_internal_key(request: Request, call_next):
     # 헬스체크는 인증 제외
-    if request.url.path in ["/internal/health", "/docs", "/redoc", "/openapi.json"]:
+    if request.url.path in ["/internal/health", "/internal/ai/health/detailed", "/docs", "/redoc", "/openapi.json"]:
         return await call_next(request)
 
     key = request.headers.get("X-Internal-Key")
@@ -34,25 +33,9 @@ async def verify_internal_key(request: Request, call_next):
 
 
 # 라우터 등록
+app.include_router(internal.router)
 app.include_router(roadmap.router, prefix="/internal")
 app.include_router(courses.router, prefix="/internal")
 app.include_router(chat.router, prefix="/internal")
-
-
-# 헬스체크
-@app.get("/internal/health")
-async def health():
-    try:
-        collection = get_collection()
-        count = collection.count()
-        return {
-            "status": "ok",
-            "chromadb": "connected",
-            "course_count": count,
-            "llm_model": settings.llm_model,
-        }
-    except Exception as e:
-        return JSONResponse(
-            status_code=503,
-            content={"status": "error", "detail": str(e)},
-        )
+app.include_router(quiz.router, prefix="/internal")
+app.include_router(note.router, prefix="/internal")
