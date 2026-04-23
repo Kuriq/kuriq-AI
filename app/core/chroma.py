@@ -15,5 +15,5 @@ def get_client():
 def get_collection():
     global _collection
     if _collection is None:
-        _collection = get_client().get_or_create_collection("courses")
+        _collection = get_client().get_or_create_collection("kuriq_courses")
     return _collection

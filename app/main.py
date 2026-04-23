@@ -1,6 +1,7 @@
 import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.openapi.utils import get_openapi
 from app.routers import roadmap, courses, chat, internal, quiz, note
 from app.core.config import settings
 
@@ -16,6 +17,32 @@ app = FastAPI(
     docs_url="/docs",       # 개발 환경에서만 사용
     redoc_url="/redoc",
 )
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    schema["components"]["securitySchemes"] = {
+        "InternalKey": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-Internal-Key",
+        }
+    }
+    for path in schema.get("paths", {}).values():
+        for operation in path.values():
+            operation["security"] = [{"InternalKey": []}]
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = custom_openapi
 
 
 # 내부 인증 미들웨어
