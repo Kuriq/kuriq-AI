@@ -1,7 +1,7 @@
 import time
 import logging
 from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from app.core.config import settings
 from app.schemas.chat import ChatRequest, ChatResponse, ChatMetadata
 

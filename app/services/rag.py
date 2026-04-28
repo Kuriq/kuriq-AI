@@ -1,27 +1,25 @@
 import logging
-from openai import OpenAI
+from sentence_transformers import SentenceTransformer
 
-from app.core.config import settings
 from app.core.chroma import get_collection
 from app.schemas.course import CourseResult
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
-_openai_client = None
+_st_model = None
 
 
-def _get_client() -> OpenAI:
-    global _openai_client
-    if _openai_client is None:
-        _openai_client = OpenAI(api_key=settings.openai_api_key)
-    return _openai_client
+def _get_model() -> SentenceTransformer:
+    global _st_model
+    if _st_model is None:
+        _st_model = SentenceTransformer(EMBEDDING_MODEL)
+    return _st_model
 
 
 def _embed(text: str) -> list[float]:
-    response = _get_client().embeddings.create(model=EMBEDDING_MODEL, input=text)
-    return response.data[0].embedding
+    return _get_model().encode(text).tolist()
 
 
 def search_courses(
@@ -31,29 +29,31 @@ def search_courses(
 ) -> list[CourseResult]:
     collection = get_collection()
 
-    where = {"isActive": True}
-    if category:
-        where["category"] = category
+    where = {"category": category} if category else None
 
     vector = _embed(query)
 
-    results = collection.query(
+    query_kwargs = dict(
         query_embeddings=[vector],
         n_results=top_k,
-        where=where,
         include=["metadatas"],
     )
+    if where:
+        query_kwargs["where"] = where
+
+    results = collection.query(**query_kwargs)
 
     metadatas: list[dict] = results.get("metadatas", [[]])[0]
+    ids: list[str] = results.get("ids", [[]])[0]
 
     courses = []
-    for m in metadatas:
+    for course_id, m in zip(ids, metadatas):
         courses.append(CourseResult(
-            course_id=m["courseId"],
-            title=m["title"],
-            institution=m.get("platform", ""),
+            course_id=course_id,
+            title=m.get("title", ""),
+            institution=m.get("institution", m.get("platform", "")),
             category=m.get("category", ""),
-            duration=f"{m.get('durationWeeks', 0)}주",
+            duration=m.get("duration", ""),
         ))
 
     logger.info(f"[RAG] query='{query[:30]}' category={category} results={len(courses)}")

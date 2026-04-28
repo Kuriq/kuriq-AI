@@ -3,7 +3,7 @@ import time
 import logging
 from typing import List
 from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from app.core.config import settings
 from app.schemas.roadmap import (
     RoadmapRequest, RoadmapResponse,
