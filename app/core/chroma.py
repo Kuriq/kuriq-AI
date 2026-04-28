@@ -8,7 +8,10 @@ _collection = None
 def get_client():
     global _client
     if _client is None:
-        _client = chromadb.PersistentClient(path=settings.chroma_path)
+        if settings.chroma_mode.lower() == "server":
+            _client = chromadb.HttpClient(host=settings.chroma_host, port=settings.chroma_port)
+        else:
+            _client = chromadb.PersistentClient(path=settings.chroma_path)
     return _client
 
 
