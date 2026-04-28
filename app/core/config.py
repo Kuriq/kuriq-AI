@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     rag_top_k: int = 20
     chroma_path: str = "./chroma_db"
     chroma_mode: str = "local"
+    crawler_data_base_url: str = "http://localhost:8001"
+    crawler_data_timeout: int = 30
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
