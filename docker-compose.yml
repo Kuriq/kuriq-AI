@@ -1,0 +1,22 @@
+services:
+  kuriq-data:
+    build:
+      context: ../kuriq-data
+    ports:
+      - "8001:8001"
+    environment:
+      DATA_GO_KR_API_KEY: ${DATA_GO_KR_API_KEY}
+      KOCW_API_KEY: ${KOCW_API_KEY:-}
+
+  kuriq-ai:
+    build:
+      context: .
+    depends_on:
+      - kuriq-data
+    ports:
+      - "8000:8000"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      INTERNAL_SECRET_KEY: ${INTERNAL_SECRET_KEY:-dev-secret}
+      CRAWLER_DATA_BASE_URL: http://kuriq-data:8001
+      CRAWLER_DATA_TIMEOUT: ${CRAWLER_DATA_TIMEOUT:-30}
