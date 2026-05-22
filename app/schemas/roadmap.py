@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import List, Optional
+from typing import List, Optional, Optional
 
 # Request 
 
@@ -33,6 +33,7 @@ class ExtractedIntent(BaseModel):
 
 class CourseInWeek(BaseModel):
     courseId: str
+    courseIndex: Optional[int] = None  # LLM 이 인덱스로 선택 (검증용)
     orderInWeek: int
 
 
