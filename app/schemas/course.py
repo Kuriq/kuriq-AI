@@ -69,3 +69,36 @@ class DeleteEmbeddingRequest(BaseModel):
 class DeleteEmbeddingResponse(BaseModel):
     deleted: int
     notFound: int
+
+
+# ── 강좌 검색 ────────────────────────────────────────────────
+
+class CourseSearchRequest(BaseModel):
+    keyword: Optional[str] = None
+    platform: Optional[str] = None
+    category: Optional[str] = None
+    difficulty: Optional[str] = None
+    page: Optional[int] = 0
+    size: Optional[int] = 20
+
+
+class CourseSearchResult(BaseModel):
+    id: str
+    title: str
+    platform: str
+    institution: str
+    category: str
+    difficulty: str
+    durationWeeks: int
+    estimatedHours: float
+    hasCertificate: bool
+    url: str
+
+
+class CourseSearchResponse(BaseModel):
+    content: list[CourseSearchResult]
+    totalElements: int
+    totalPages: int
+    currentPage: int
+    size: int
+    hasNext: bool
