@@ -116,3 +116,23 @@ curl -H "X-Internal-Key: <your-secret-key>" ...
 ```
 
 **인증 불필요 경로**: `/internal/health`, `/internal/ai/health/detailed`, `/docs`, `/redoc`, `/openapi.json`
+## 📡 API Endpoints
+
+### Roadmap
+- `POST /internal/ai/roadmap/generate` - 로드맵 생성
+- `POST /internal/ai/roadmap/reschedule` - 로드맵 재조정
+
+### Courses
+- `POST /internal/ai/courses/search` - chromaDB 강좌 검색
+- `POST /internal/ai/courses/metadata` - 강좌 메타데이터 조회
+- `POST /internal/ai/embedding/course` - 강좌 임베딩 생성
+
+### Quiz
+- `POST /internal/ai/quiz/generate` - 퀴즈 생성
+- `POST /internal/ai/quiz/grade` - 단답형 채점
+
+### Chat
+- `POST /internal/ai/chat` - RAG 기반 채팅
+
+### Note
+- `POST /internal/ai/organize` - AI 노트 정리

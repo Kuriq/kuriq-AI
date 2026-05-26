@@ -2,7 +2,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
-from app.routers import roadmap, courses, chat, internal, quiz, note, crawler
+from app.routers import roadmap, courses, chat, internal, quiz, note, crawler, metadata
 from app.core.config import settings
 
 logging.basicConfig(
@@ -67,3 +67,4 @@ app.include_router(chat.router, prefix="/internal")
 app.include_router(quiz.router, prefix="/internal")
 app.include_router(note.router, prefix="/internal")
 app.include_router(crawler.router, prefix="/internal")
+app.include_router(metadata.router, prefix="/internal")

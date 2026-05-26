@@ -48,8 +48,10 @@ def search_courses(
 
     courses = []
     for course_id, m in zip(ids, metadatas):
+        # chromaDB ID (K-MOOC_19921) 를 platform_courseId 형식으로 반환
+        # 백엔드에서 platform + platformCourseId 로 강좌를 찾음
         courses.append(CourseResult(
-            course_id=course_id,
+            course_id=course_id,  # K-MOOC_19921 형식
             title=m.get("title", ""),
             institution=m.get("institution", m.get("platform", "")),
             category=m.get("category", ""),
@@ -57,4 +59,5 @@ def search_courses(
         ))
 
     logger.info(f"[RAG] query='{query[:30]}' category={category} results={len(courses)}")
+    logger.info(f"[RAG] 반환된 course_id 목록: {[c.course_id for c in courses[:5]]}...")  # 최대 5 개만
     return courses

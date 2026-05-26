@@ -29,7 +29,7 @@ def _build_text(course: CourseEmbeddingItem) -> str:
 def _build_metadata(course: CourseEmbeddingItem) -> dict:
     m = course.metadata
     return {
-        "courseId": course.courseId,
+        "courseId": course.courseId,  # 백엔드 DB UUID
         "title": course.title,
         "platform": m.platform,
         "difficulty": m.difficulty,
