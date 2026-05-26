@@ -46,4 +46,4 @@ class ChatResponse(BaseModel):
     message: str
     noteReferences: List[str]
     isOffTopic: bool
-    metadata: ChatMetadata
+    metadata: ChatMetadata                             
