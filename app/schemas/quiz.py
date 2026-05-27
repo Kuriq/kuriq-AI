@@ -30,13 +30,10 @@ class QuizGradeResponse(BaseModel):
     metadata: QuizGradeMetadata
 
 
-VALID_DIFFICULTIES = {"입문", "초급", "중급", "심화"}
-
-
 class QuizGenerateRequest(BaseModel):
     noteContent: str
     courseTitle: str
-    courseDifficulty: str
+    courseDifficulty: str = "초급"
     excludeQuestions: Optional[list[str]] = None
     questionCount: int = 5
     userId: str
@@ -45,7 +42,7 @@ class QuizGenerateRequest(BaseModel):
     @classmethod
     def note_min_length(cls, v: str) -> str:
         if len(v.strip()) < 50:
-            raise ValueError("noteContent는 최소 50자 이상이어야 합니다.")
+            raise ValueError("noteContent 는 최소 50 자 이상이어야 합니다.")
         return v
 
     @field_validator("courseTitle", "userId")
@@ -53,13 +50,6 @@ class QuizGenerateRequest(BaseModel):
     def must_not_be_blank(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("값이 비어 있을 수 없습니다.")
-        return v
-
-    @field_validator("courseDifficulty")
-    @classmethod
-    def valid_difficulty(cls, v: str) -> str:
-        if v not in VALID_DIFFICULTIES:
-            raise ValueError(f"courseDifficulty는 {VALID_DIFFICULTIES} 중 하나여야 합니다.")
         return v
 
 

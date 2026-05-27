@@ -30,7 +30,6 @@ ORGANIZE_SYSTEM = """당신은 학습 노트 정리 전문가입니다.
 ORGANIZE_USER_TEMPLATE = """강좌 정보:
 - 강좌명: {courseTitle}
 - 분야: {courseCategory}
-- 난이도: {courseDifficulty}
 
 학습 노트:
 {noteContent}"""
@@ -48,7 +47,6 @@ def organize_note(request: NoteOrganizeRequest) -> NoteOrganizeResponse:
     user_msg = ORGANIZE_USER_TEMPLATE.format(
         courseTitle=request.courseTitle,
         courseCategory=request.courseCategory,
-        courseDifficulty=request.courseDifficulty,
         noteContent=request.noteContent,
     )
     response = llm.invoke([
