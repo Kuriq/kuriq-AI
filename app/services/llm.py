@@ -123,13 +123,16 @@ def generate_roadmap(
     """2 단계: 의도 + 후보 강좌 → 로드맵 생성"""
     start = time.time()
 
+    # weeklyHours 가 0 이면 기본값 설정
+    weekly_hours = intent.weeklyHours if intent.weeklyHours and intent.weeklyHours > 0 else 5.0
+    
     # 재생성 시 temperature 높이고 제외 강좌 필터링
-    temperature = 0.3  # 기본 temperature 상향 (0.1 → 0.3)
+    temperature = 0.3
     max_retries = 2
     
     for attempt in range(max_retries + 1):
         try:
-            current_temp = temperature + (attempt * 0.2)  # 재시도할 때마다 temperature 증가
+            current_temp = temperature + (attempt * 0.2)
             
             if request.regeneration:
                 current_temp += 0.2
@@ -146,10 +149,9 @@ def generate_roadmap(
                 interestArea=intent.interestArea,
                 currentLevel=intent.currentLevel,
                 goal=intent.goal,
-                weeklyHours=intent.weeklyHours,
+                weeklyHours=weekly_hours,  # 기본값 사용
                 candidate_courses=candidate_text,
             )
-            # 프롬프트에 인덱스 범위 명시
             roadmap_system = ROADMAP_SYSTEM.format(max_index=len(candidates) - 1)
             messages = [
                 SystemMessage(content=roadmap_system),
@@ -159,7 +161,6 @@ def generate_roadmap(
             raw = _call_llm(messages, llm)
             logger.info(f"[LLM] raw 응답 (시도 {attempt + 1}/{max_retries + 1}): {raw[:500]}...")
             
-            # 마크다운 코드 블록 제거
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
@@ -175,7 +176,6 @@ def generate_roadmap(
             
             logger.info(f"[LLM] 파싱된 data: {data}")
 
-            # courseIndex 를 courseId 로 변환
             valid_indices = set(range(len(candidates)))
             weeks = []
             total_valid_courses = 0
@@ -192,14 +192,14 @@ def generate_roadmap(
                             orderInWeek=c["orderInWeek"]
                         ))
                     elif idx is not None:
-                        logger.warning(f"[LLM] 범위를 벗어난 courseIndex={idx} 무시 (유효 범위: 0-{len(candidates)-1})")
+                        logger.warning(f"[LLM] 범위를 벗어난 courseIndex={idx} 무시")
                 
                 if valid_courses:
                     weeks.append(WeekPlan(
                         weekNumber=w["weekNumber"],
                         title=w["title"],
                         description=w["description"],
-                        totalHours=w.get("totalHours", intent.weeklyHours),
+                        totalHours=w.get("totalHours", weekly_hours),
                         courses=valid_courses,
                     ))
                     total_valid_courses += len(valid_courses)
@@ -215,7 +215,20 @@ def generate_roadmap(
                 logger.error(f"[LLM] 모든 주차에 유효한 강좌가 없음 — LLM hallucination 발생")
                 logger.error(f"[LLM] LLM 이 반환한 courseIndex: {all_requested_indices}")
                 logger.error(f"[LLM] 실제 유효한 인덱스: 0-{len(candidates)-1}")
-                raise ValueError("LLM 이 존재하지 않는 강좌 인덱스를 반환했습니다.")
+                
+                # Fallback: 강제로 첫 번째 주차에 첫 번째 강좌 배정
+                logger.warning("[LLM] Fallback: 강제로 강좌 배정")
+                if candidates:
+                    weeks = [WeekPlan(
+                        weekNumber=1,
+                        title="학습 시작",
+                        description="선택된 강좌로 학습을 시작합니다.",
+                        totalHours=weekly_hours,
+                        courses=[CourseInWeek(courseId=candidates[0].course_id, orderInWeek=1)],
+                    )]
+                    total_valid_courses = 1
+                else:
+                    raise ValueError("LLM 이 존재하지 않는 강좌 인덱스를 반환했습니다.")
             
             if total_valid_courses < len(candidates) * 0.3:
                 logger.warning(f"[LLM] 유효한 강좌가 {total_valid_courses}개로 적음 ({len(candidates)}개 중)")
@@ -225,7 +238,7 @@ def generate_roadmap(
             return RoadmapResponse(
                 goal=data.get("goal", intent.goal),
                 totalWeeks=len(weeks),
-                weeklyHours=intent.weeklyHours,
+                weeklyHours=weekly_hours,
                 weeks=weeks,
                 metadata=RoadmapMetadata(
                     extractedIntent=intent,
@@ -241,7 +254,6 @@ def generate_roadmap(
             logger.warning(f"[LLM] 로드맵 생성 실패 (시도 {attempt + 1}/{max_retries + 1}): {e}")
             continue
     
-    # 모든 재시도 실패
     raise ValueError("LLM 로드맵 생성 최대 재시도 횟수 초과")
     # 프롬프트에 인덱스 범위 명시
     roadmap_system = ROADMAP_SYSTEM.format(max_index=len(candidates) - 1)
