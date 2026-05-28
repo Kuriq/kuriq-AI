@@ -68,8 +68,9 @@ async def search_courses(
 ):
     """
     chromaDB 에서 강좌 검색
-    - keyword: 벡터 검색에 사용
-    - platform, category, difficulty: 메타데이터 필터
+    - keyword: title 에서 검색 (문자열 포함 여부)
+    - category: metadata category 필터
+    - platform: metadata platform 필터 (기관)
     """
     # 내부 API 키 검증
     if x_internal_key != INTERNAL_API_KEY:
@@ -78,77 +79,63 @@ async def search_courses(
     try:
         collection = get_collection()
         
-        # 메타데이터 필터 빌드 (실제 chromaDB 필드명 사용)
+        # 메타데이터 필터 빌드
         where_filter = None
-        if request.platform or request.category or request.difficulty:
-            where_conditions = []
-            if request.platform:
-                where_conditions.append({"platform": request.platform})
-            if request.category:
-                where_conditions.append({"category": request.category})
-            if request.difficulty:
-                # chromaDB 에는 'level' 필드로 저장됨
-                where_conditions.append({"level": request.difficulty})
-            
-            if len(where_conditions) == 1:
-                where_filter = where_conditions[0]
-            elif len(where_conditions) > 1:
-                where_filter = {"$and": where_conditions}
+        where_conditions = []
         
-        # 벡터 검색 (keyword 가 있으면 임베딩, 없으면 전체)
-        if request.keyword and request.keyword.strip():
-            # keyword 로 임베딩 생성해서 검색
-            from openai import OpenAI
-            from app.core.config import settings
-            
-            client = OpenAI(api_key=settings.openai_api_key)
-            embedding_response = client.embeddings.create(
-                model="text-embedding-3-small",
-                input=request.keyword,
-            )
-            query_embedding = embedding_response.data[0].embedding
-            
-            results = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=100,  # 일단 많이 가져와서 필터링
-                where=where_filter,
-                include=["metadatas", "documents"],
-            )
-        else:
-            # keyword 없으면 메타데이터 필터만 사용
+        # category 필터
+        if request.category:
+            where_conditions.append({"category": request.category})
+        
+        # platform 필터 (기관)
+        if request.platform:
+            where_conditions.append({"platform": request.platform})
+        
+        # difficulty 필터
+        if request.difficulty:
+            where_conditions.append({"level": request.difficulty})
+        
+        if len(where_conditions) == 1:
+            where_filter = where_conditions[0]
+        elif len(where_conditions) > 1:
+            where_filter = {"$and": where_conditions}
+        
+        # 페이징 설정
+        page = request.page or 0
+        size = request.size or 20
+        offset = page * size
+        
+        # ChromaDB 는 한 번에 많은 데이터를 가져올 수 없으므로 배치로 조회
+        BATCH_SIZE = 5000
+        all_courses = []
+        keyword = request.keyword.strip() if request.keyword else ""
+        
+        for batch_offset in range(0, 100000, BATCH_SIZE):  # 최대 10 만개까지
             results = collection.get(
                 where=where_filter,
                 include=["metadatas"],
-                limit=100,  # 기본 제한
+                limit=BATCH_SIZE,
+                offset=batch_offset,
             )
-        
-        # 결과 가공
-        courses = []
-        if request.keyword and request.keyword.strip():
-            # query 결과 처리
-            if results["ids"] and len(results["ids"]) > 0:
-                for i, course_id in enumerate(results["ids"][0]):
-                    metadata = results["metadatas"][0][i] if results["metadatas"] else {}
-                    courses.append({
+            
+            if not results["ids"]:
+                break
+            
+            metadatas_list = results["metadatas"] if isinstance(results["metadatas"], list) else []
+            
+            for i, course_id in enumerate(results["ids"]):
+                metadata = metadatas_list[i] if i < len(metadatas_list) else {}
+                
+                if isinstance(metadata, dict):
+                    title = metadata.get("title", "")
+                    
+                    # keyword 필터링: title 에 포함 여부
+                    if keyword and keyword not in title:
+                        continue
+                    
+                    all_courses.append({
                         "id": course_id,
-                        "title": metadata.get("title", ""),
-                        "platform": metadata.get("platform", ""),
-                        "institution": metadata.get("institution", metadata.get("platform", "")),
-                        "category": metadata.get("category", ""),
-                        "difficulty": metadata.get("level", ""),
-                        "durationWeeks": 0,  # chromaDB 에 없음
-                        "estimatedHours": 0,  # chromaDB 에 없음
-                        "hasCertificate": False,  # chromaDB 에 없음
-                        "url": metadata.get("url", ""),
-                    })
-        else:
-            # get 결과 처리
-            if results["ids"]:
-                for i, course_id in enumerate(results["ids"]):
-                    metadata = results["metadatas"][i] if results["metadatas"] else {}
-                    courses.append({
-                        "id": course_id,
-                        "title": metadata.get("title", ""),
+                        "title": title,
                         "platform": metadata.get("platform", ""),
                         "institution": metadata.get("institution", metadata.get("platform", "")),
                         "category": metadata.get("category", ""),
@@ -158,14 +145,23 @@ async def search_courses(
                         "hasCertificate": False,
                         "url": metadata.get("url", ""),
                     })
+            
+            # 다음 배치가 필요 없는 경우 (현재 페이지의 데이터를 모두 찾음)
+            if len(all_courses) > offset + size:
+                # 하지만 필터/키워드가 있으면 전체 개수를 알아야 하므로 계속 조회
+                if where_filter or keyword:
+                    continue
+                else:
+                    break
         
-        # 페이징
-        page = request.page or 0
-        size = request.size or 20
-        total_elements = len(courses)
-        start_idx = page * size
-        end_idx = start_idx + size
-        paginated_courses = courses[start_idx:end_idx]
+        # 페이징 적용
+        paginated_courses = all_courses[offset:offset + size]
+        
+        # 총 개수: 필터/키워드가 없으면 전체 count 사용, 있으면 실제 필터링된 수
+        if not where_filter and not keyword:
+            total_elements = collection.count()
+        else:
+            total_elements = len(all_courses)
         
         return CourseSearchResponse(
             content=paginated_courses,
@@ -173,7 +169,7 @@ async def search_courses(
             totalPages=(total_elements + size - 1) // size,
             currentPage=page,
             size=size,
-            hasNext=end_idx < total_elements,
+            hasNext=len(paginated_courses) == size,
         )
         
     except Exception as e:

@@ -1,25 +1,30 @@
 import logging
-from sentence_transformers import SentenceTransformer
+from openai import OpenAI
 
 from app.core.chroma import get_collection
+from app.core.config import settings
 from app.schemas.course import CourseResult
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+EMBEDDING_MODEL = "text-embedding-3-small"
 
-_st_model = None
+_client = None
 
 
-def _get_model() -> SentenceTransformer:
-    global _st_model
-    if _st_model is None:
-        _st_model = SentenceTransformer(EMBEDDING_MODEL)
-    return _st_model
+def _get_client() -> OpenAI:
+    global _client
+    if _client is None:
+        _client = OpenAI(api_key=settings.openai_api_key)
+    return _client
 
 
 def _embed(text: str) -> list[float]:
-    return _get_model().encode(text).tolist()
+    response = _get_client().embeddings.create(
+        model=EMBEDDING_MODEL,
+        input=text,
+    )
+    return response.data[0].embedding
 
 
 def search_courses(
