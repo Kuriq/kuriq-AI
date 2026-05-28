@@ -53,10 +53,14 @@ def search_courses(
 
     courses = []
     for course_id, m in zip(ids, metadatas):
-        # chromaDB ID (K-MOOC_19921) 를 platform_courseId 형식으로 반환
+        # chromaDB ID 를 platform_courseId 형식으로 변환
         # 백엔드에서 platform + platformCourseId 로 강좌를 찾음
+        platform = m.get("platform", "UNKNOWN")
+        platform_prefix = platform.replace(" ", "_").replace("-", "_").upper()
+        formatted_course_id = f"{platform_prefix}_{course_id}"
+        
         courses.append(CourseResult(
-            course_id=course_id,  # K-MOOC_19921 형식
+            course_id=formatted_course_id,  # LLL_PORTAL_3379164 형식
             title=m.get("title", ""),
             institution=m.get("institution", m.get("platform", "")),
             category=m.get("category", ""),
