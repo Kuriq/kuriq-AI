@@ -2,10 +2,8 @@ import asyncio
 import time
 import logging
 
-from openai import AsyncOpenAI
-
-from app.core.config import settings
 from app.core.chroma import get_collection
+from app.services.auto_embedder import embed_texts
 from app.schemas.course import (
     CourseEmbeddingItem, EmbeddingRequest,
     EmbeddingMetadata, EmbeddingResponse,
@@ -14,7 +12,6 @@ from app.schemas.course import (
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 100
-EMBEDDING_MODEL = "text-embedding-3-small"
 
 
 def _build_text(course: CourseEmbeddingItem) -> str:
@@ -44,28 +41,22 @@ async def embed_courses(request: EmbeddingRequest) -> EmbeddingResponse:
     start = time.monotonic()
     courses = request.courses
     collection = await asyncio.to_thread(get_collection)
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     succeeded = 0
     failed_ids: list[str] = []
-    call_count = 0
 
     for offset in range(0, len(courses), BATCH_SIZE):
         batch = courses[offset: offset + BATCH_SIZE]
         texts = [_build_text(c) for c in batch]
 
         try:
-            response = await client.embeddings.create(
-                model=EMBEDDING_MODEL,
-                input=texts,
-            )
-            call_count += 1
-            vectors = [e.embedding for e in response.data]
+            # 자동 임베딩 (ChromaDB 차원에 맞춤)
+            embeddings = embed_texts(texts, batch_size=BATCH_SIZE)
 
             await asyncio.to_thread(
                 collection.upsert,
                 ids=[c.courseId for c in batch],
-                embeddings=vectors,
+                embeddings=embeddings,
                 metadatas=[_build_metadata(c) for c in batch],
                 documents=texts,
             )
@@ -84,7 +75,7 @@ async def embed_courses(request: EmbeddingRequest) -> EmbeddingResponse:
         failed=len(failed_ids),
         failedCourseIds=failed_ids,
         metadata=EmbeddingMetadata(
-            embeddingCallCount=call_count,
+            embeddingCallCount=len(courses) // BATCH_SIZE + 1,
             processingTimeMs=elapsed,
         ),
     )

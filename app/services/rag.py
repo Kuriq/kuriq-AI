@@ -1,30 +1,10 @@
 import logging
-from openai import OpenAI
 
 from app.core.chroma import get_collection
-from app.core.config import settings
+from app.services.auto_embedder import embed_text
 from app.schemas.course import CourseResult
 
 logger = logging.getLogger(__name__)
-
-EMBEDDING_MODEL = "text-embedding-3-small"
-
-_client = None
-
-
-def _get_client() -> OpenAI:
-    global _client
-    if _client is None:
-        _client = OpenAI(api_key=settings.openai_api_key)
-    return _client
-
-
-def _embed(text: str) -> list[float]:
-    response = _get_client().embeddings.create(
-        model=EMBEDDING_MODEL,
-        input=text,
-    )
-    return response.data[0].embedding
 
 
 def search_courses(
@@ -36,7 +16,8 @@ def search_courses(
 
     where = {"category": category} if category else None
 
-    vector = _embed(query)
+    # 자동 임베딩 (ChromaDB 차원에 맞춤)
+    vector = embed_text(query)
 
     query_kwargs = dict(
         query_embeddings=[vector],
@@ -52,17 +33,34 @@ def search_courses(
     ids: list[str] = results.get("ids", [[]])[0]
 
     courses = []
-    for course_id, m in zip(ids, metadatas):
-        # chromaDB ID 를 platform_courseId 형식으로 변환
-        # 백엔드에서 platform + platformCourseId 로 강좌를 찾음
-        platform = m.get("platform", "UNKNOWN")
-        platform_prefix = platform.replace(" ", "_").replace("-", "_").upper()
-        formatted_course_id = f"{platform_prefix}_{course_id}"
+    for chroma_id, m in zip(ids, metadatas):
+        # ChromaDB 에 저장된 ID 가 이미 "platform_courseId" 형식
+        # 예: "K-MOOC_6695", "KOCW_ac910cc25f4c5099"
+        # 백엔드 format: "K_MOOC_6695", "KOCW_ac910cc25f4c5099" (대시 → 언더스코어)
+        raw_platform = m.get("platform", "UNKNOWN")
+        
+        # 플랫폼명을 영어로 변환 (백엔드 Platform Enum 과 일치)
+        platform_en = {
+            "온국민평생배움터": "LLL_PORTAL",
+            "에버러닝": "EVERLEARNING",
+            "K-MOOC": "K_MOOC",
+            "KOCW": "KOCW",
+            "전국평생학습": "LLL_PORTAL",
+        }.get(raw_platform, raw_platform.replace("-", "_").replace(" ", "_").upper())
+        
+        # ChromaDB ID 에서 플랫폼 프리픽스 제거 후 다시 포맷팅
+        # "K-MOOC_6695" → "6695" → "K_MOOC_6695"
+        if "_" in chroma_id:
+            platform_course_id = chroma_id.split("_", 1)[1]
+        else:
+            platform_course_id = chroma_id
+        
+        formatted_course_id = f"{platform_en}_{platform_course_id}"
         
         courses.append(CourseResult(
-            course_id=formatted_course_id,  # LLL_PORTAL_3379164 형식
+            course_id=formatted_course_id,
             title=m.get("title", ""),
-            institution=m.get("institution", m.get("platform", "")),
+            institution=m.get("institution", raw_platform),
             category=m.get("category", ""),
             duration=m.get("duration", ""),
         ))
