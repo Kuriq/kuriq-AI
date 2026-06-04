@@ -155,13 +155,14 @@ async def search_courses(
                 
                 if isinstance(metadata, dict):
                     title = metadata.get("title", "")
+                    backend_course_id = metadata.get("courseId") or course_id
                     
                     # keyword 필터링: title 에 포함 여부
                     if keyword and keyword not in title:
                         continue
                     
                     all_courses.append({
-                        "id": course_id,
+                        "id": backend_course_id,
                         "title": title,
                         "platform": metadata.get("platform", ""),
                         "institution": metadata.get("institution", metadata.get("platform", "")),
