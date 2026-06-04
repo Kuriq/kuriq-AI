@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
 from app.routers import roadmap, courses, chat, internal, quiz, note, crawler, metadata
 from app.core.config import settings
+from app.routers import recommendations # 다음 강좌 추천 엔드포인트 추가
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,3 +69,4 @@ app.include_router(quiz.router, prefix="/internal")
 app.include_router(note.router, prefix="/internal")
 app.include_router(crawler.router, prefix="/internal")
 app.include_router(metadata.router, prefix="/internal")
+app.include_router(recommendations.router, prefix="/internal") # 다음 강좌 추천 엔드포인트 추가
