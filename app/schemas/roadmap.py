@@ -53,6 +53,7 @@ class RoadmapMetadata(BaseModel):
 
 
 class RoadmapResponse(BaseModel):
+    title: str
     goal: str
     totalWeeks: int
     weeklyHours: float

@@ -34,15 +34,27 @@ async def get_course_metadata(
     try:
         collection = get_collection()
         
-        # courseId 에서 platform prefix 제거 (LLL_PORTAL_3379164 → 3379164)
+        # courseId 를 ChromaDB 저장 형식으로 변환
+        # 백엔드 형식: K_MOOC_12287, KOCW_abc123, 온국민평생배움터_12345
+        # ChromaDB 형식: K-MOOC_12287, KOCW_abc123, 온국민평생배움터_12345
         chroma_ids = []
+        requested_by_chroma_id = {}
         for course_id in request.courseIds:
-            if "_" in course_id:
-                # PLATFORM_COURSEID 형식 → 실제 ChromaDB ID 추출
-                chroma_id = course_id.split("_", 1)[1]
-                chroma_ids.append(chroma_id)
-            else:
-                chroma_ids.append(course_id)
+            chroma_id = course_id
+
+            if course_id.startswith("K_MOOC_"):
+                chroma_id = f"K-MOOC_{course_id[len('K_MOOC_'):]}"
+            elif course_id.startswith("EVERLEARNING_"):
+                chroma_id = f"에버러닝_{course_id[len('EVERLEARNING_'):]}"
+            elif course_id.startswith("LLL_PORTAL_"):
+                chroma_id = f"온국민평생배움터_{course_id[len('LLL_PORTAL_'):]}"
+            elif course_id.startswith("KOCW_"):
+                chroma_id = course_id
+
+            chroma_ids.append(chroma_id)
+            requested_by_chroma_id[chroma_id] = course_id
+        
+        logger.info(f"[Metadata] 백엔드 ID → ChromaDB ID 변환: {request.courseIds[:3]} → {chroma_ids[:3]}")
         
         # chromaDB 에서 메타데이터 조회
         results = collection.get(
@@ -52,17 +64,30 @@ async def get_course_metadata(
         
         # 결과 가공
         courses = []
-        for i, course_id in enumerate(results["ids"]):
-            metadata = results["metadatas"][i] if results["metadatas"] else {}
+        result_ids = results.get("ids", [])
+        result_metadatas = results.get("metadatas", []) or []
+
+        for i, course_id in enumerate(result_ids):
+            metadata = result_metadatas[i] if i < len(result_metadatas) else {}
             
             # 원래 요청된 courseId 형식으로 반환 (PLATFORM_COURSEID)
-            original_course_id = request.courseIds[i] if i < len(request.courseIds) else course_id
+            original_course_id = requested_by_chroma_id.get(course_id, course_id)
+            
+            # 플랫폼명을 영어로 변환 (백엔드 Platform Enum 과 일치)
+            raw_platform = metadata.get("platform", "")
+            platform_en = {
+                "온국민평생배움터": "LLL_PORTAL",
+                "에버러닝": "EVERLEARNING",
+                "K-MOOC": "K_MOOC",
+                "KOCW": "KOCW",
+                "전국평생학습": "LLL_PORTAL",
+            }.get(raw_platform, raw_platform.replace("-", "_").replace(" ", "_").upper())
             
             courses.append({
                 "courseId": original_course_id,
                 "title": metadata.get("title", ""),
-                "platform": metadata.get("platform", ""),
-                "institution": metadata.get("institution", metadata.get("platform", "")),
+                "platform": platform_en,  # 영어 플랫폼명
+                "institution": metadata.get("institution", raw_platform),
                 "category": metadata.get("category", ""),
                 "difficulty": metadata.get("level", ""),
                 "durationWeeks": 0,  # chromaDB 에 없음
