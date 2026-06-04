@@ -15,6 +15,29 @@ router = APIRouter()
 INTERNAL_API_KEY = "dev-secret"  # 환경 변수로 관리 권장
 
 
+def _platform_aliases(platform: str) -> list[str]:
+    normalized = (platform or "").strip()
+    if not normalized:
+        return []
+
+    alias_map = {
+        "K_MOOC": ["K_MOOC", "K-MOOC"],
+        "K-MOOC": ["K_MOOC", "K-MOOC"],
+        "KOCW": ["KOCW"],
+        "LLL_PORTAL": ["LLL_PORTAL", "ALLGO", "온국민평생배움터"],
+        "ALLGO": ["LLL_PORTAL", "ALLGO", "온국민평생배움터"],
+        "온국민평생배움터": ["LLL_PORTAL", "ALLGO", "온국민평생배움터"],
+        "EVERLEARNING": ["EVERLEARNING", "에버러닝", "전국평생학습"],
+        "에버러닝": ["EVERLEARNING", "에버러닝", "전국평생학습"],
+        "전국평생학습": ["EVERLEARNING", "에버러닝", "전국평생학습"],
+        "SEOUL_LLL": ["SEOUL_LLL", "서울시평생학습포털", "서울시 평생학습포털"],
+        "서울시평생학습포털": ["SEOUL_LLL", "서울시평생학습포털", "서울시 평생학습포털"],
+        "서울시 평생학습포털": ["SEOUL_LLL", "서울시평생학습포털", "서울시 평생학습포털"],
+    }
+
+    return alias_map.get(normalized, [normalized])
+
+
 @router.delete("/ai/embedding/course", response_model=DeleteEmbeddingResponse)
 async def delete_course_embeddings(request: DeleteEmbeddingRequest):
     try:
@@ -87,9 +110,13 @@ async def search_courses(
         if request.category:
             where_conditions.append({"category": request.category})
         
-        # platform 필터 (기관)
+        # platform 필터 (기관/플랫폼 alias 허용)
         if request.platform:
-            where_conditions.append({"platform": request.platform})
+            aliases = _platform_aliases(request.platform)
+            if len(aliases) == 1:
+                where_conditions.append({"platform": aliases[0]})
+            elif aliases:
+                where_conditions.append({"$or": [{"platform": alias} for alias in aliases]})
         
         # difficulty 필터
         if request.difficulty:
