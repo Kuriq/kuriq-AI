@@ -1,0 +1,15 @@
+.git
+.github
+.env
+venv
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+logs
+build
+dist
+chroma_db
+.DS_Store
