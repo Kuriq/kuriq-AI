@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     openai_api_key: str
     llm_model: str = "gpt-4o-mini"
     llm_timeout: int = 30
-    internal_secret_key: str = "dev-secret"
+    internal_secret_key: str
     rag_top_k: int = 20
     chroma_mode: str = "server"
     chroma_path: str = "./chroma_db"

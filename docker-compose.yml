@@ -47,7 +47,7 @@ services:
       - "8000:8000"
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      INTERNAL_SECRET_KEY: ${INTERNAL_SECRET_KEY:-dev-secret}
+      INTERNAL_SECRET_KEY: ${INTERNAL_SECRET_KEY}
       CRAWLER_DATA_BASE_URL: http://kuriq-data:8001
       CRAWLER_DATA_TIMEOUT: ${CRAWLER_DATA_TIMEOUT:-30}
       CHROMA_MODE: server
