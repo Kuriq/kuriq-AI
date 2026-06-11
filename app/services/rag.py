@@ -15,7 +15,7 @@ def _format_course_id(chroma_id: str, metadata: dict) -> str:
         "에버러닝": "EVERLEARNING",
         "K-MOOC": "K_MOOC",
         "KOCW": "KOCW",
-        "전국평생학습": "LLL_PORTAL",
+        "전국평생학습": "EVERLEARNING",
     }.get(raw_platform, raw_platform.replace("-", "_").replace(" ", "_").upper())
 
     if "_" in chroma_id:
