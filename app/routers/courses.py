@@ -8,6 +8,11 @@ from app.schemas.course import (
 )
 from app.core.chroma import get_collection
 from app.services.embedding import embed_courses
+from app.utils.course_metadata import (
+    canonicalize_platform,
+    matches_platform,
+    normalize_institution,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -110,14 +115,6 @@ async def search_courses(
         if request.category:
             where_conditions.append({"category": request.category})
         
-        # platform 필터 (기관/플랫폼 alias 허용)
-        if request.platform:
-            aliases = _platform_aliases(request.platform)
-            if len(aliases) == 1:
-                where_conditions.append({"platform": aliases[0]})
-            elif aliases:
-                where_conditions.append({"$or": [{"platform": alias} for alias in aliases]})
-        
         # difficulty 필터
         if request.difficulty:
             where_conditions.append({"level": request.difficulty})
@@ -156,16 +153,22 @@ async def search_courses(
                 if isinstance(metadata, dict):
                     title = metadata.get("title", "")
                     backend_course_id = metadata.get("courseId") or course_id
-                    
+                    raw_platform = metadata.get("platform", "")
+                    raw_institution = metadata.get("institution", "")
+                    normalized_platform = canonicalize_platform(raw_platform, raw_institution)
+                     
                     # keyword 필터링: title 에 포함 여부
                     if keyword and keyword not in title:
+                        continue
+
+                    if not matches_platform(raw_platform, raw_institution, request.platform):
                         continue
                     
                     all_courses.append({
                         "id": backend_course_id,
                         "title": title,
-                        "platform": metadata.get("platform", ""),
-                        "institution": metadata.get("institution", metadata.get("platform", "")),
+                        "platform": normalized_platform,
+                        "institution": normalize_institution(raw_institution, normalized_platform),
                         "category": metadata.get("category", ""),
                         "difficulty": metadata.get("level", ""),
                         "durationWeeks": 0,

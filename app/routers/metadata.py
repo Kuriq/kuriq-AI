@@ -3,6 +3,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 from app.core.chroma import get_collection
+from app.utils.course_metadata import canonicalize_platform, normalize_institution
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -73,21 +74,15 @@ async def get_course_metadata(
             # 원래 요청된 courseId 형식으로 반환 (PLATFORM_COURSEID)
             original_course_id = requested_by_chroma_id.get(course_id, course_id)
             
-            # 플랫폼명을 영어로 변환 (백엔드 Platform Enum 과 일치)
             raw_platform = metadata.get("platform", "")
-            platform_en = {
-                "온국민평생배움터": "LLL_PORTAL",
-                "에버러닝": "EVERLEARNING",
-                "K-MOOC": "K_MOOC",
-                "KOCW": "KOCW",
-                "전국평생학습": "LLL_PORTAL",
-            }.get(raw_platform, raw_platform.replace("-", "_").replace(" ", "_").upper())
+            raw_institution = metadata.get("institution", "")
+            platform_en = canonicalize_platform(raw_platform, raw_institution)
             
             courses.append({
                 "courseId": original_course_id,
                 "title": metadata.get("title", ""),
-                "platform": platform_en,  # 영어 플랫폼명
-                "institution": metadata.get("institution", raw_platform),
+                "platform": platform_en,
+                "institution": normalize_institution(raw_institution, platform_en),
                 "category": metadata.get("category", ""),
                 "difficulty": metadata.get("level", ""),
                 "durationWeeks": 0,  # chromaDB 에 없음
