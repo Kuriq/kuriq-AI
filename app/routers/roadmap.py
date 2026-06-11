@@ -2,7 +2,7 @@ import logging
 import time
 from fastapi import APIRouter, HTTPException
 from app.schemas.roadmap import RoadmapRequest, RoadmapResponse, RescheduleRequest, RescheduleResponse
-from app.services.rag import search_courses
+from app.services.rag import fallback_search_courses, search_courses
 from app.services.llm import extract_intent, generate_roadmap
 from app.services.reschedule import reschedule_roadmap
 from app.core.config import settings
@@ -10,7 +10,7 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-MIN_CANDIDATE_POOL = 5
+MIN_CANDIDATE_POOL = 1
 
 
 @router.post("/ai/roadmap/generate", response_model=RoadmapResponse)
@@ -36,6 +36,9 @@ async def generate(request: RoadmapRequest):
             category=None,
             top_k=settings.rag_top_k,
         )
+        if len(candidates) < MIN_CANDIDATE_POOL:
+            logger.warning(f"[로드맵] 벡터 검색 결과 부족 — fallback 검색 시도 ({len(candidates)}개)")
+            candidates = fallback_search_courses(query, top_k=max(settings.rag_top_k, 20))
         logger.info(f"[로드맵] 후보 강좌 {len(candidates)}개 검색됨")
     except Exception as e:
         logger.error(f"[로드맵] 벡터 검색 실패: {e}")
