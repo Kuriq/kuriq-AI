@@ -133,6 +133,8 @@ async def search_courses(
         BATCH_SIZE = 5000
         all_courses = []
         keyword = request.keyword.strip() if request.keyword else ""
+        platform_filter = request.platform.strip() if request.platform else ""
+        has_post_filter = bool(keyword or platform_filter)
         
         for batch_offset in range(0, 100000, BATCH_SIZE):  # 최대 10 만개까지
             results = collection.get(
@@ -180,7 +182,7 @@ async def search_courses(
             # 다음 배치가 필요 없는 경우 (현재 페이지의 데이터를 모두 찾음)
             if len(all_courses) > offset + size:
                 # 하지만 필터/키워드가 있으면 전체 개수를 알아야 하므로 계속 조회
-                if where_filter or keyword:
+                if where_filter or has_post_filter:
                     continue
                 else:
                     break
@@ -189,7 +191,7 @@ async def search_courses(
         paginated_courses = all_courses[offset:offset + size]
         
         # 총 개수: 필터/키워드가 없으면 전체 count 사용, 있으면 실제 필터링된 수
-        if not where_filter and not keyword:
+        if not where_filter and not has_post_filter:
             total_elements = collection.count()
         else:
             total_elements = len(all_courses)
