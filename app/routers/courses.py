@@ -11,6 +11,7 @@ from app.services.embedding import embed_courses
 from app.utils.course_metadata import (
     canonicalize_platform,
     matches_platform,
+    normalize_category,
     normalize_institution,
 )
 
@@ -111,9 +112,7 @@ async def search_courses(
         where_filter = None
         where_conditions = []
         
-        # category 필터
-        if request.category:
-            where_conditions.append({"category": request.category})
+        normalized_category = normalize_category(request.category)
         
         # difficulty 필터
         if request.difficulty:
@@ -158,6 +157,7 @@ async def search_courses(
                     raw_platform = metadata.get("platform", "")
                     raw_institution = metadata.get("institution", "")
                     normalized_platform = canonicalize_platform(raw_platform, raw_institution)
+                    normalized_category_value = normalize_category(metadata.get("category", ""))
                      
                     # keyword 필터링: title 에 포함 여부
                     if keyword and keyword not in title:
@@ -165,13 +165,16 @@ async def search_courses(
 
                     if not matches_platform(raw_platform, raw_institution, request.platform):
                         continue
+
+                    if request.category and normalized_category_value != normalized_category:
+                        continue
                     
                     all_courses.append({
                         "id": backend_course_id,
                         "title": title,
                         "platform": normalized_platform,
                         "institution": normalize_institution(raw_institution, normalized_platform),
-                        "category": metadata.get("category", ""),
+                        "category": normalized_category_value,
                         "difficulty": metadata.get("level", ""),
                         "durationWeeks": 0,
                         "estimatedHours": 0,
