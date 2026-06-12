@@ -27,7 +27,7 @@ async def get_course_metadata(
     """
     chromaDB 에서 courseId 로 메타데이터 조회
     백엔드가 로드맵 생성 시 사용
-    courseId 형식: PLATFORM_COURSEID (예: LLL_PORTAL_3379164)
+    courseId 형식: backend UUID 또는 legacy PLATFORM_COURSEID
     """
     if x_internal_key != INTERNAL_API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -84,7 +84,7 @@ async def get_course_metadata(
                 "platform": platform_en,
                 "institution": normalize_institution(raw_institution, platform_en),
                 "category": metadata.get("category", ""),
-                "difficulty": metadata.get("level", ""),
+                "difficulty": metadata.get("difficulty") or metadata.get("level", ""),
                 "durationWeeks": 0,  # chromaDB 에 없음
                 "estimatedHours": 0,  # chromaDB 에 없음
                 "hasCertificate": False,  # chromaDB 에 없음

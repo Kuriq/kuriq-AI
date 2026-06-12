@@ -9,6 +9,10 @@ logger = logging.getLogger(__name__)
 
 
 def _format_course_id(chroma_id: str, metadata: dict) -> str:
+    backend_course_id = (metadata.get("courseId") or "").strip()
+    if backend_course_id:
+        return backend_course_id
+
     raw_platform = metadata.get("platform", "UNKNOWN")
     platform_en = {
         "온국민평생배움터": "LLL_PORTAL",

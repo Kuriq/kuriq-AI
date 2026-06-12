@@ -175,7 +175,7 @@ async def search_courses(
                         "platform": normalized_platform,
                         "institution": normalize_institution(raw_institution, normalized_platform),
                         "category": normalized_category_value,
-                        "difficulty": metadata.get("level", ""),
+                        "difficulty": metadata.get("difficulty") or metadata.get("level", ""),
                         "durationWeeks": 0,
                         "estimatedHours": 0,
                         "hasCertificate": False,
