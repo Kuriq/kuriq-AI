@@ -1,7 +1,8 @@
 from pydantic import BaseModel, field_validator
-from typing import List, Optional, Optional
+from typing import List, Optional
 
-# Request 
+
+# ── Request ────────────────────────────────────────────────────────────────────
 
 class RoadmapRequest(BaseModel):
     prompt: str
@@ -19,21 +20,22 @@ class RoadmapRequest(BaseModel):
         return v
 
 
-# 의도 추출 결과
+# ── 의도 추출 결과 ─────────────────────────────────────────────────────────────
 
 class ExtractedIntent(BaseModel):
     interestArea: str
-    currentLevel: str       # 입문 / 초급 / 중급 / 심화
+    currentLevel: str        # 입문 / 초급 / 중급 / 심화
     goal: str
     weeklyHours: float
     durationPreference: str  # short / medium / long
+    targetAudience: Optional[str] = None  # 학습자 특성 (예: 50대 중장년, 직장인, 대학생)
 
 
-#  Response 
+# ── Response ───────────────────────────────────────────────────────────────────
 
 class CourseInWeek(BaseModel):
     courseId: str
-    courseIndex: Optional[int] = None  # LLM 이 인덱스로 선택 (검증용)
+    courseIndex: Optional[int] = None  # LLM이 인덱스로 선택 (검증용)
     orderInWeek: int
 
 
@@ -61,14 +63,14 @@ class RoadmapResponse(BaseModel):
     metadata: RoadmapMetadata
 
 
-# 에러 응답
+# ── 에러 응답 ──────────────────────────────────────────────────────────────────
 
 class ErrorResponse(BaseModel):
     code: str
     message: str
 
 
-# Reschedule
+# ── Reschedule ─────────────────────────────────────────────────────────────────
 
 class RemainingCourse(BaseModel):
     courseId: str
