@@ -34,7 +34,11 @@ INTENT_SYSTEM = """당신은 학습자의 목표를 분석하는 전문가입니
 추론 기준:
 - 언급이 없으면 weeklyHours는 5로 설정
 - 입문/처음/기초/모른다 언급 시 currentLevel은 "입문"
-- durationPreference: 단기/빠르게 → short, 언급 없으면 → medium, 깊게/전문가 → long
+- durationPreference 기준:
+  * 사용자가 "1주", "2주" 등 명시한 경우 → 그 기간에 맞게 short/medium/long 선택
+  * "빠르게", "단기" 언급 → short
+  * 기간 언급 없으면 → medium (기본값)
+  * "깊게", "전문가", "장기" 언급 → long
 - goal은 반드시 구체적으로 작성 (단순히 "배우고 싶다" → "X를 활용해 Y를 할 수 있다"로 구체화)
 - 연령/직업/상황이 언급되면 targetAudience에 반영
 """
@@ -53,19 +57,26 @@ ROADMAP_SYSTEM = """당신은 대한민국 공공 교육 플랫폼(K-MOOC, KOCW,
 4. 사용 가능한 인덱스 범위: 0부터 {max_index}까지. 이 범위를 절대 벗어나지 마세요.
 5. 후보 강좌가 1개 이상이면 무조건 1주 이상 생성하세요.
 
+[기간 결정 규칙]
+6. 희망 학습 기간을 최우선으로 따르세요:
+   - 사용자가 "1주", "2주" 등 명시한 경우 → 반드시 그 주수로 생성
+   - short (단기): 1~3주
+   - medium (중기): 4~8주 — 기간 언급이 없으면 반드시 이 범위로 생성
+   - long (장기): 9주 이상
+
 [퀄리티 규칙]
-6. 난이도 순서로 강좌를 배열하세요 (입문 → 초급 → 중급 → 심화).
-7. 주당 총 학습 시간(totalHours)이 weeklyHours에 맞도록 강좌 수를 조절하세요.
-8. 주차당 강좌는 2~4개로 구성하세요 (너무 많거나 적으면 안 됨).
-9. 각 주차 title은 학습 흐름을 잘 나타내는 구체적인 제목으로 작성하세요.
-   예: "파이썬 기초 문법 다지기", "데이터 시각화 실습", "머신러닝 개념 이해"
-10. 각 주차 description은 반드시 3문장으로 작성하세요:
+7. 난이도 순서로 강좌를 배열하세요 (입문 → 초급 → 중급 → 심화).
+8. 주당 총 학습 시간(totalHours)이 weeklyHours에 맞도록 강좌 수를 조절하세요.
+9. 주차당 강좌는 2~4개로 구성하세요 (너무 많거나 적으면 안 됨).
+10. 각 주차 title은 학습 흐름을 잘 나타내는 구체적인 제목으로 작성하세요.
+    예: "베이킹 재료와 도구 이해", "기초 반죽 실습", "다양한 디저트 완성"
+11. 각 주차 description은 반드시 3문장으로 작성하세요:
     ① 이번 주 핵심 학습 목표
     ② 이번 주에 수강할 강좌들의 특징 및 연결고리
     ③ 이번 주를 마치면 할 수 있게 되는 것 (구체적 능력)
-11. 로드맵 goal은 전체 수료 후 달성 가능한 능력을 2~3문장으로 구체적으로 서술하세요.
-12. 학습자 특성(나이, 직업, 상황)을 반영해 강좌 선택과 설명 톤을 조절하세요.
-13. 로드맵 title은 학습자의 목표와 수준을 반영한 구체적인 제목으로 작성하세요.
+12. 로드맵 goal은 전체 수료 후 달성 가능한 능력을 2~3문장으로 구체적으로 서술하세요.
+13. 학습자 특성(나이, 직업, 상황)을 반영해 강좌 선택과 설명 톤을 조절하세요.
+14. 로드맵 title은 학습자의 목표와 수준을 반영한 구체적인 제목으로 작성하세요.
     예: "50대를 위한 디지털 역량 강화 로드맵", "비전공자를 위한 파이썬 입문 로드맵"
 
 출력 형식:
@@ -93,6 +104,7 @@ ROADMAP_USER_TEMPLATE = """사용자 프로필:
 - 현재 수준: {currentLevel}
 - 학습 목표: {goal}
 - 주당 학습 시간: {weeklyHours}시간
+- 희망 학습 기간: {duration_label}
 - 학습자 특성: {targetAudience}
 - 원본 입력: "{original_prompt}"
 
@@ -100,7 +112,7 @@ ROADMAP_USER_TEMPLATE = """사용자 프로필:
 {candidate_courses}
 
 위 정보를 바탕으로 체계적이고 풍부한 주간 학습 로드맵을 JSON으로 생성해주세요.
-학습자 특성과 원본 입력을 반드시 반영하고, 각 주차 description은 반드시 3문장으로 작성하세요."""
+희망 학습 기간을 반드시 준수하고, 각 주차 description은 반드시 3문장으로 작성하세요."""
 
 
 def _get_llm(temperature: float = 0.1) -> ChatOpenAI:
@@ -132,6 +144,15 @@ def _clean_json(raw: str) -> str:
         if raw.startswith("json"):
             raw = raw[4:]
     return raw.strip()
+
+
+def _duration_label(preference: str) -> str:
+    """durationPreference → 사람이 읽기 쉬운 기간 레이블 변환"""
+    return {
+        "short": "단기 (1~3주)",
+        "medium": "중기 (4~8주)",
+        "long": "장기 (9주 이상)",
+    }.get(preference, "중기 (4~8주)")
 
 
 def extract_intent(prompt: str) -> ExtractedIntent:
@@ -191,6 +212,7 @@ def generate_roadmap(
                 currentLevel=intent.currentLevel,
                 goal=intent.goal,
                 weeklyHours=weekly_hours,
+                duration_label=_duration_label(intent.durationPreference),  # 기간 레이블
                 targetAudience=target_audience,
                 original_prompt=request.prompt,  # 원본 입력 그대로 전달
                 candidate_courses=candidate_text,
