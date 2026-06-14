@@ -2,15 +2,19 @@ from typing import Optional
 from pydantic import BaseModel, field_validator
 
 
+# ── 강좌 검색 결과 (RAG 파이프라인 내부용) ────────────────────────────────────
+
 class CourseResult(BaseModel):
     course_id: str
     title: str
     institution: str
     category: str
     duration: str
+    difficulty: Optional[str] = None      # 난이도 (입문/초급/중급/심화)
+    duration_weeks: Optional[int] = None  # 수강 기간 (주 단위)
 
 
-# 임베딩 생성 
+# ── 임베딩 생성 ────────────────────────────────────────────────────────────────
 
 class CourseMetadata(BaseModel):
     platform: str
@@ -53,7 +57,7 @@ class EmbeddingResponse(BaseModel):
     metadata: EmbeddingMetadata
 
 
-# ── 임베딩 삭제 ────────────────────────────────────────────────
+# ── 임베딩 삭제 ────────────────────────────────────────────────────────────────
 
 class DeleteEmbeddingRequest(BaseModel):
     courseIds: list[str]
@@ -71,7 +75,7 @@ class DeleteEmbeddingResponse(BaseModel):
     notFound: int
 
 
-# ── 강좌 검색 ────────────────────────────────────────────────
+# ── 강좌 검색 (검색 API용) ─────────────────────────────────────────────────────
 
 class CourseSearchRequest(BaseModel):
     keyword: Optional[str] = None
