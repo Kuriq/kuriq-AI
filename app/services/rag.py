@@ -1,6 +1,5 @@
 import logging
 import re
-
 from app.core.chroma import get_collection
 from app.services.auto_embedder import embed_text
 from app.schemas.course import CourseResult
@@ -9,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 def _format_course_id(chroma_id: str, metadata: dict) -> str:
+    """ChromaDB ID를 백엔드 course_id로 변환"""
     backend_course_id = (metadata.get("courseId") or "").strip()
     if backend_course_id:
         return backend_course_id
@@ -31,6 +31,7 @@ def _format_course_id(chroma_id: str, metadata: dict) -> str:
 
 
 def _to_course_result(chroma_id: str, metadata: dict) -> CourseResult:
+    """ChromaDB 메타데이터 → CourseResult 변환"""
     raw_platform = metadata.get("platform", "UNKNOWN")
     return CourseResult(
         course_id=_format_course_id(chroma_id, metadata),
@@ -38,10 +39,13 @@ def _to_course_result(chroma_id: str, metadata: dict) -> CourseResult:
         institution=metadata.get("institution", raw_platform),
         category=metadata.get("category", ""),
         duration=metadata.get("duration", ""),
+        difficulty=metadata.get("difficulty") or metadata.get("level", ""),  # 난이도
+        duration_weeks=metadata.get("durationWeeks") or 0,                   # 수강 기간 (주)
     )
 
 
 def fallback_search_courses(query: str, top_k: int = 20) -> list[CourseResult]:
+    """벡터 검색 실패 시 키워드 기반 fallback 검색"""
     collection = get_collection()
     fallback_limit = max(top_k * 10, 200)
     results = collection.get(include=["metadatas"], limit=fallback_limit)
@@ -50,6 +54,7 @@ def fallback_search_courses(query: str, top_k: int = 20) -> list[CourseResult]:
     metadatas: list[dict] = results.get("metadatas", [])
     courses = [_to_course_result(chroma_id, metadata or {}) for chroma_id, metadata in zip(ids, metadatas)]
 
+    # 쿼리 토큰으로 점수 계산
     tokens = [token for token in re.findall(r"[0-9A-Za-z가-힣]+", query.lower()) if len(token) > 1]
     if not tokens:
         return courses[:top_k]
@@ -67,6 +72,7 @@ def fallback_search_courses(query: str, top_k: int = 20) -> list[CourseResult]:
     scored.sort(key=lambda item: (-item[0], item[1].title))
     ranked = [course for _, course in scored]
 
+    # 상위 결과가 top_k보다 적으면 나머지로 채움
     if len(ranked) < top_k:
         seen = {course.course_id for course in ranked}
         ranked.extend(course for course in courses if course.course_id not in seen)
@@ -79,11 +85,11 @@ def search_courses(
     category: str | None = None,
     top_k: int = 20,
 ) -> list[CourseResult]:
+    """ChromaDB 벡터 검색"""
     collection = get_collection()
-
     where = {"category": category} if category else None
 
-    # 자동 임베딩 (ChromaDB 차원에 맞춤)
+    # 쿼리 텍스트를 임베딩 벡터로 변환
     vector = embed_text(query)
 
     query_kwargs = dict(
@@ -104,5 +110,6 @@ def search_courses(
         courses.append(_to_course_result(chroma_id, m or {}))
 
     logger.info(f"[RAG] query='{query[:30]}' category={category} results={len(courses)}")
-    logger.info(f"[RAG] 반환된 course_id 목록: {[c.course_id for c in courses[:5]]}...")  # 최대 5 개만
+    logger.info(f"[RAG] 반환된 course_id 목록: {[c.course_id for c in courses[:5]]}...")
+
     return courses
