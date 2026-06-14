@@ -44,15 +44,30 @@ def _to_course_result(chroma_id: str, metadata: dict) -> CourseResult:
     )
 
 
+def _deduplicate(courses: list[CourseResult]) -> list[CourseResult]:
+    """같은 제목의 강좌 중복 제거 — 첫 번째만 유지 (DB 데이터는 유지됨)"""
+    seen_titles = set()
+    result = []
+    for course in courses:
+        if course.title not in seen_titles:
+            seen_titles.add(course.title)
+            result.append(course)
+    return result
+
+
 def fallback_search_courses(query: str, top_k: int = 20) -> list[CourseResult]:
     """벡터 검색 실패 시 키워드 기반 fallback 검색"""
     collection = get_collection()
-    fallback_limit = max(top_k * 10, 200)
+    # 중복 제거 후 top_k개를 확보하기 위해 넉넉하게 가져옴
+    fallback_limit = max(top_k * 20, 500)
     results = collection.get(include=["metadatas"], limit=fallback_limit)
 
     ids: list[str] = results.get("ids", [])
     metadatas: list[dict] = results.get("metadatas", [])
     courses = [_to_course_result(chroma_id, metadata or {}) for chroma_id, metadata in zip(ids, metadatas)]
+
+    # 제목 기준 중복 제거
+    courses = _deduplicate(courses)
 
     # 쿼리 토큰으로 점수 계산
     tokens = [token for token in re.findall(r"[0-9A-Za-z가-힣]+", query.lower()) if len(token) > 1]
@@ -85,16 +100,19 @@ def search_courses(
     category: str | None = None,
     top_k: int = 20,
 ) -> list[CourseResult]:
-    """ChromaDB 벡터 검색"""
+    """ChromaDB 벡터 검색 — 중복 제거 후 top_k개 반환"""
     collection = get_collection()
     where = {"category": category} if category else None
+
+    # 중복 제거 후 top_k개를 확보하기 위해 넉넉하게 요청
+    fetch_k = top_k * 5
 
     # 쿼리 텍스트를 임베딩 벡터로 변환
     vector = embed_text(query)
 
     query_kwargs = dict(
         query_embeddings=[vector],
-        n_results=top_k,
+        n_results=fetch_k,
         include=["metadatas"],
     )
     if where:
@@ -109,7 +127,10 @@ def search_courses(
     for chroma_id, m in zip(ids, metadatas):
         courses.append(_to_course_result(chroma_id, m or {}))
 
-    logger.info(f"[RAG] query='{query[:30]}' category={category} results={len(courses)}")
+    # 제목 기준 중복 제거 후 top_k개만 반환
+    courses = _deduplicate(courses)[:top_k]
+
+    logger.info(f"[RAG] query='{query[:30]}' category={category} results={len(courses)} (중복 제거 후)")
     logger.info(f"[RAG] 반환된 course_id 목록: {[c.course_id for c in courses[:5]]}...")
 
     return courses
