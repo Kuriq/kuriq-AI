@@ -9,7 +9,7 @@ router = APIRouter()
 
 # 유사도 임계값 — 이 값 이하면 관련 없는 강좌로 판단하여 제외
 # ChromaDB cosine distance 기준: 0에 가까울수록 유사, 1에 가까울수록 무관
-SIMILARITY_THRESHOLD = 0.7
+SIMILARITY_THRESHOLD = 4.0
 
 @router.post("/ai/recommendations", response_model=RecommendationResponse)
 async def get_recommendations(request: RecommendationRequest):
