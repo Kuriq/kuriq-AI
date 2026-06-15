@@ -55,6 +55,17 @@ def _deduplicate(courses: list[CourseResult]) -> list[CourseResult]:
     return result
 
 
+def _deduplicate_with_score(courses_with_scores: list[tuple[CourseResult, float]]) -> list[tuple[CourseResult, float]]:
+    """점수 포함 결과에서 같은 제목의 강좌 중복 제거 — 첫 번째만 유지"""
+    seen_titles = set()
+    result = []
+    for course, score in courses_with_scores:
+        if course.title not in seen_titles:
+            seen_titles.add(course.title)
+            result.append((course, score))
+    return result
+
+
 def fallback_search_courses(query: str, top_k: int = 20) -> list[CourseResult]:
     """벡터 검색 실패 시 키워드 기반 fallback 검색"""
     collection = get_collection()
@@ -134,3 +145,49 @@ def search_courses(
     logger.info(f"[RAG] 반환된 course_id 목록: {[c.course_id for c in courses[:5]]}...")
 
     return courses
+
+
+def search_courses_with_score(
+    query: str,
+    category: str | None = None,
+    top_k: int = 20,
+) -> list[tuple[CourseResult, float]]:
+    """ChromaDB 벡터 검색 — 유사도 점수(distance) 포함하여 반환
+
+    distance: cosine distance (0에 가까울수록 유사, 1에 가까울수록 무관)
+    추천 필터링 시 distance가 낮은 강좌만 반환하도록 사용
+    """
+    collection = get_collection()
+    where = {"category": category} if category else None
+
+    # 중복 제거 후 top_k개를 확보하기 위해 넉넉하게 요청
+    fetch_k = top_k * 5
+
+    # 쿼리 텍스트를 임베딩 벡터로 변환
+    vector = embed_text(query)
+
+    query_kwargs = dict(
+        query_embeddings=[vector],
+        n_results=fetch_k,
+        include=["metadatas", "distances"],  # distances 포함
+    )
+    if where:
+        query_kwargs["where"] = where
+
+    results = collection.query(**query_kwargs)
+
+    metadatas: list[dict] = results.get("metadatas", [[]])[0]
+    ids: list[str] = results.get("ids", [[]])[0]
+    distances: list[float] = results.get("distances", [[]])[0]  # cosine distance
+
+    courses_with_scores = []
+    for chroma_id, m, distance in zip(ids, metadatas, distances):
+        course = _to_course_result(chroma_id, m or {})
+        courses_with_scores.append((course, distance))
+
+    # 제목 기준 중복 제거 후 top_k개만 반환
+    courses_with_scores = _deduplicate_with_score(courses_with_scores)[:top_k]
+
+    logger.info(f"[RAG] query='{query[:30]}' category={category} results={len(courses_with_scores)} (점수 포함, 중복 제거 후)")
+
+    return courses_with_scores
