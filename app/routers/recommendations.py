@@ -1,21 +1,24 @@
 import logging
 from fastapi import APIRouter, HTTPException
 from app.schemas.recommendation import RecommendationRequest, RecommendationResponse, RecommendationCourse
-from app.services.rag import search_courses
+from app.services.rag import search_courses_with_score
+from app.utils.course_metadata import normalize_category
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# 유사도 임계값 — 이 값 이하면 관련 없는 강좌로 판단하여 제외
+# ChromaDB cosine distance 기준: 0에 가까울수록 유사, 1에 가까울수록 무관
+SIMILARITY_THRESHOLD = 0.7
+
 @router.post("/ai/recommendations", response_model=RecommendationResponse)
 async def get_recommendations(request: RecommendationRequest):
-
-    # 1. 카테고리 기반으로 ChromaDB 벡터 유사도 검색
+    # 1. 강좌 제목 기반으로 ChromaDB 벡터 유사도 검색 (점수 포함)
     try:
-        query = f"{request.courseTitle} 심화 다음단계 응용" # 강좌 제목에 "심화", "다음단계", "응용" 넣어서 다음 추천 검색
-        candidates = search_courses(
-            query=request.courseTitle,  # 카테고리 -> 강좌 제목으로 변경
+        candidates = search_courses_with_score(
+            query=request.courseTitle,
             category=None,  # 카테고리 필터 제거, 유사도만으로 검색
-            top_k=request.top_k,
+            top_k=request.top_k * 3,  # 필터링 후 충분한 결과를 위해 넉넉하게 요청
         )
         logger.info(f"[추천] courseId={request.courseId} 기준 후보 {len(candidates)}개 검색됨")
     except Exception as e:
@@ -25,10 +28,17 @@ async def get_recommendations(request: RecommendationRequest):
             "message": "강좌 검색 중 오류가 발생했습니다.",
         })
 
-    # 2. 방금 이수한 강좌 본인 제외
-    filtered = [c for c in candidates if c.course_id != request.courseId]
+    # 2. 본인 강좌 제외 + 유사도 임계값 이하 제외
+    # distance가 낮을수록 유사도가 높음 (cosine distance)
+    filtered = [
+        c for c, distance in candidates
+        if c.course_id != request.courseId
+        and distance <= SIMILARITY_THRESHOLD
+    ]
 
-    # 3. 응답 반환
+    logger.info(f"[추천] 유사도 필터링 후 {len(filtered)}개 남음 (threshold={SIMILARITY_THRESHOLD})")
+
+    # 3. 응답 반환 (top_k개만)
     return RecommendationResponse(
         courses=[
             RecommendationCourse(
@@ -38,6 +48,6 @@ async def get_recommendations(request: RecommendationRequest):
                 category=c.category,
                 duration=c.duration,
             )
-            for c in filtered
+            for c in filtered[:request.top_k]
         ]
     )
