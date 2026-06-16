@@ -167,7 +167,11 @@ def generate_quiz(request: QuizGenerateRequest) -> QuizGenerateResponse:
 
     exclude_note = ""
     if request.excludeQuestions:
-        exclude_note = f"\n이전에 출제된 문제가 {len(request.excludeQuestions)}개 있습니다. 중복되지 않도록 다양한 주제로 출제하세요."
+        previous_questions = "\n".join(f"- {question}" for question in request.excludeQuestions)
+        exclude_note = (
+            f"\n이전에 출제된 문제가 {len(request.excludeQuestions)}개 있습니다. 아래 문제들과 중복되지 않도록 새로운 문제를 출제하세요."
+            f"\n이전 문제 목록:\n{previous_questions}"
+        )
 
     user_msg = (
         f"강좌명: {request.courseTitle}\n"
