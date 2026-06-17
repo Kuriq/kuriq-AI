@@ -7,6 +7,7 @@ from pydantic import BaseModel, field_validator
 class CourseResult(BaseModel):
     course_id: str
     title: str
+    platform: str = ""
     institution: str
     category: str
     duration: str

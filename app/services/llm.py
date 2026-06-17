@@ -198,7 +198,7 @@ def generate_roadmap(
 
             # 후보 강좌 텍스트 — 난이도·기간 포함해서 AI가 더 잘 판단하도록
             candidate_text = "\n".join([
-                f"[{i}] {c.title} | {c.institution} | {c.category} | 난이도: {c.difficulty or '미정'} | 기간: {c.duration_weeks or 0}주"
+                f"[{i}] {c.title} | 플랫폼: {c.platform or '미정'} | {c.institution} | {c.category} | 난이도: {c.difficulty or '미정'} | 기간: {c.duration_weeks or 0}주"
                 for i, c in enumerate(candidates)
             ])
 

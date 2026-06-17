@@ -1,5 +1,7 @@
 import logging
+import math
 import re
+from collections import defaultdict
 from app.core.chroma import get_collection
 from app.services.auto_embedder import embed_text
 from app.schemas.course import CourseResult
@@ -36,6 +38,7 @@ def _to_course_result(chroma_id: str, metadata: dict) -> CourseResult:
     return CourseResult(
         course_id=_format_course_id(chroma_id, metadata),
         title=metadata.get("title", ""),
+        platform=raw_platform,
         institution=metadata.get("institution", raw_platform),
         category=metadata.get("category", ""),
         duration=metadata.get("duration", ""),
@@ -53,6 +56,40 @@ def _deduplicate(courses: list[CourseResult]) -> list[CourseResult]:
             seen_titles.add(course.title)
             result.append(course)
     return result
+
+
+def _platform_key(course: CourseResult) -> str:
+    return (course.platform or course.institution or "UNKNOWN").strip() or "UNKNOWN"
+
+
+def _diversify_by_platform(courses: list[CourseResult], top_k: int) -> list[CourseResult]:
+    """한 플랫폼이 로드맵 후보를 독식하지 않도록 검색 순위를 유지하며 섞는다."""
+    if top_k <= 0 or len(courses) <= top_k:
+        return courses[:top_k]
+
+    platform_limit = max(2, math.ceil(top_k / 3))
+    selected: list[CourseResult] = []
+    selected_ids: set[str] = set()
+    selected_by_platform: dict[str, int] = defaultdict(int)
+
+    for course in courses:
+        platform = _platform_key(course)
+        if selected_by_platform[platform] >= platform_limit:
+            continue
+        selected.append(course)
+        selected_ids.add(course.course_id)
+        selected_by_platform[platform] += 1
+        if len(selected) >= top_k:
+            return selected
+
+    for course in courses:
+        if course.course_id in selected_ids:
+            continue
+        selected.append(course)
+        if len(selected) >= top_k:
+            break
+
+    return selected
 
 
 def _deduplicate_with_score(courses_with_scores: list[tuple[CourseResult, float]]) -> list[tuple[CourseResult, float]]:
@@ -115,8 +152,8 @@ def search_courses(
     collection = get_collection()
     where = {"category": category} if category else None
 
-    # 중복 제거 후 top_k개를 확보하기 위해 넉넉하게 요청
-    fetch_k = top_k * 5
+    # 중복/플랫폼 편중 제거 후 top_k개를 확보하기 위해 넉넉하게 요청
+    fetch_k = max(top_k * 30, 500)
 
     # 쿼리 텍스트를 임베딩 벡터로 변환
     vector = embed_text(query)
@@ -138,11 +175,12 @@ def search_courses(
     for chroma_id, m in zip(ids, metadatas):
         courses.append(_to_course_result(chroma_id, m or {}))
 
-    # 제목 기준 중복 제거 후 top_k개만 반환
-    courses = _deduplicate(courses)[:top_k]
+    # 제목 기준 중복 제거 후 플랫폼이 과도하게 편중되지 않도록 후보를 구성
+    courses = _diversify_by_platform(_deduplicate(courses), top_k)
 
-    logger.info(f"[RAG] query='{query[:30]}' category={category} results={len(courses)} (중복 제거 후)")
+    logger.info(f"[RAG] query='{query[:30]}' category={category} results={len(courses)} (중복/플랫폼 편중 제거 후)")
     logger.info(f"[RAG] 반환된 course_id 목록: {[c.course_id for c in courses[:5]]}...")
+    logger.info(f"[RAG] 반환된 platform 목록: {[c.platform for c in courses]}")
 
     return courses
 
